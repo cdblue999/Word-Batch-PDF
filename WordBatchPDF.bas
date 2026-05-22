@@ -37,22 +37,24 @@ Option Explicit
 ' Main entry point
 '=====================================================================
 Public Sub BatchWordToPDF()
-    Dim fd As FileDialog
+    Dim fd As Object
     Dim folderPath As String
     Dim fso As Object
     Dim folder As Object
-    Dim file As Object
-    Dim doc As Document
+    Dim f As Object
+    Dim doc As Object
     Dim ext As String
     Dim baseName As String
     Dim pdfPath As String
-    Dim success As Long
-    Dim total As Long
-    Dim failed As String
+    Dim okCount As Long
+    Dim errCount As Long
+    Dim errList As String
     Dim msg As String
     
+    On Error GoTo ErrHandler
+    
     ' 1. Select folder
-    Set fd = Application.FileDialog(msoFileDialogFolderPicker)
+    Set fd = Application.FileDialog(3)
     fd.Title = "Select folder with Word files to convert to PDF"
     If fd.Show <> -1 Then Exit Sub
     folderPath = fd.SelectedItems(1)
@@ -60,91 +62,81 @@ Public Sub BatchWordToPDF()
     
     ' 2. Validate folder
     Set fso = CreateObject("Scripting.FileSystemObject")
-    If Not fso.FolderExists(folderPath) Then
-        MsgBox "Folder does not exist." & vbCrLf & folderPath, vbExclamation, "Word Batch PDF"
+    If fso.FolderExists(folderPath) = False Then
+        MsgBox "Folder does not exist.", vbExclamation, "Word Batch PDF"
         Exit Sub
     End If
     
     Set folder = fso.GetFolder(folderPath)
-    success = 0
-    total = 0
-    failed = ""
+    okCount = 0
+    errCount = 0
+    errList = ""
     
     Application.ScreenUpdating = False
     
     ' 3. Process each file
-    For Each file In folder.Files
-        ext = LCase(fso.GetExtensionName(file.Path))
-        If IsWordExtension(ext) Then
-            total = total + 1
-            Set doc = Nothing
+    For Each f In folder.Files
+        ext = LCase(fso.GetExtensionName(f.Path))
+        If IsWordExt(ext) Then
             On Error Resume Next
-            
-            ' Open document read-only and hidden
-            ' Documents.Open(FileName, ConfirmConversions, ReadOnly, AddToRecentFiles, PasswordDocument, PasswordTemplate, Revert, WritePasswordDocument, WritePasswordTemplate, Format, Encoding, Visible)
-            Set doc = Documents.Open(file.Path, , True, , , , , , , , , False)
+            Set doc = Nothing
+            Set doc = Documents.Open(f.Path, , True)
             If doc Is Nothing Then
-                failed = failed & file.Name & " - " & Err.Description & vbCrLf
+                errCount = errCount + 1
+                errList = errList & f.Name & vbCrLf
                 Err.Clear
             Else
-                ' Build PDF path (same folder, .pdf extension)
-                baseName = fso.GetBaseName(file.Path)
+                baseName = fso.GetBaseName(f.Path)
                 pdfPath = folderPath & baseName & ".pdf"
-                
-                ' Export to PDF — positional arguments for maximum compatibility
-                ' ExportAsFixedFormat(OutputFileName, ExportFormat, [OpenAfterExport], [OptimizeFor], [Range])
-                doc.ExportAsFixedFormat pdfPath, wdExportFormatPDF, False, wdExportOptimizeForPrint, wdExportAllDocument
-                
+                doc.ExportAsFixedFormat pdfPath, 0, False, 0, 0
                 If Err.Number <> 0 Then
-                    failed = failed & file.Name & " - " & Err.Description & vbCrLf
+                    errCount = errCount + 1
+                    errList = errList & f.Name & vbCrLf
                     Err.Clear
                 Else
-                    success = success + 1
+                    okCount = okCount + 1
                 End If
-                
-                ' Close without saving changes to original
-                doc.Close wdDoNotSaveChanges
+                doc.Close 0
             End If
             On Error GoTo 0
         End If
-    Next file
+    Next f
     
     Application.ScreenUpdating = True
     
     ' 4. Show summary
-    If total = 0 Then
-        MsgBox "No Word files found in the selected folder." & vbCrLf & _
-               "Supported: .doc .docx .docm .dot .dotx .dotm .odt .rtf", _
-               vbInformation, "Word Batch PDF"
-    ElseIf failed = "" Then
-        msg = "Conversion complete!" & vbCrLf & _
-              "All " & success & " files converted to PDF successfully." & vbCrLf & vbCrLf & _
-              "Output folder: " & folderPath
+    If okCount = 0 And errCount = 0 Then
+        MsgBox "No Word files found in the selected folder.", vbInformation, "Word Batch PDF"
+    ElseIf errCount = 0 Then
+        msg = "Conversion complete!" & vbCrLf & vbCrLf & _
+              "All " & okCount & " files converted to PDF.", vbInformation, "Word Batch PDF"
         MsgBox msg, vbInformation, "Word Batch PDF"
+    ElseIf okCount > 0 Then
+        msg = "Partial success:" & vbCrLf & vbCrLf & _
+              "OK: " & okCount & "  Failed: " & errCount & vbCrLf & vbCrLf & _
+              "Errors:" & vbCrLf & errList
+        MsgBox msg, vbExclamation, "Word Batch PDF"
     Else
-        msg = "Conversion finished with errors." & vbCrLf & vbCrLf & _
-              "Successful: " & success & " / " & total & vbCrLf & vbCrLf & _
-              "Failed files:" & vbCrLf & failed
+        msg = "All files failed:" & vbCrLf & vbCrLf & errList
         MsgBox msg, vbExclamation, "Word Batch PDF"
     End If
     
-    ' 5. Open output folder in Explorer
-    On Error Resume Next
-    Shell "explorer.exe """ & folderPath & """", vbNormalFocus
+    Shell "explorer.exe """ & folderPath & """", 1
+    Exit Sub
+    
+ErrHandler:
+    Application.ScreenUpdating = True
+    MsgBox "Error: " & Err.Description, vbCritical, "Word Batch PDF"
 End Sub
 
 '=====================================================================
 ' Check if extension is a Word-compatible format
 '=====================================================================
-Private Function IsWordExtension(ByVal ext As String) As Boolean
+Private Function IsWordExt(ByVal ext As String) As Boolean
     Select Case ext
         Case "doc", "docx", "docm", "dot", "dotx", "dotm", "odt", "rtf"
-            IsWordExtension = True
+            IsWordExt = True
         Case Else
-            IsWordExtension = False
+            IsWordExt = False
     End Select
 End Function
-
-'=====================================================================
-' End of Module
-'=====================================================================
