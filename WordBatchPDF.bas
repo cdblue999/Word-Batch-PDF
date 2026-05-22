@@ -42,7 +42,7 @@ Public Sub BatchWordToPDF()
     Dim fso As Object
     Dim folder As Object
     Dim file As Object
-    Dim doc As Word.Document
+    Dim doc As Document
     Dim ext As String
     Dim baseName As String
     Dim pdfPath As String
@@ -81,7 +81,8 @@ Public Sub BatchWordToPDF()
             On Error Resume Next
             
             ' Open document read-only and hidden
-            Set doc = Documents.Open(file.Path, ReadOnly:=True, Visible:=False)
+            ' Documents.Open(FileName, ConfirmConversions, ReadOnly, AddToRecentFiles, PasswordDocument, PasswordTemplate, Revert, WritePasswordDocument, WritePasswordTemplate, Format, Encoding, Visible)
+            Set doc = Documents.Open(file.Path, , True, , , , , , , , , False)
             If doc Is Nothing Then
                 failed = failed & file.Name & " - " & Err.Description & vbCrLf
                 Err.Clear
@@ -90,15 +91,9 @@ Public Sub BatchWordToPDF()
                 baseName = fso.GetBaseName(file.Path)
                 pdfPath = folderPath & baseName & ".pdf"
                 
-                ' Export to PDF
-                doc.ExportAsFixedFormat OutputFileName:=pdfPath, _
-                    ExportFormat:=wdExportFormatPDF, _
-                    OpenAfterExport:=False, _
-                    OptimizeFor:=wdExportOptimizeForPrint, _
-                    Range:=wdExportAllDocument, _
-                    IncludeDocProps:=True, _
-                    KeepIHQ:=True, _
-                    CreateBookmarks:=wdExportCreateWordBookmarks
+                ' Export to PDF — positional arguments for maximum compatibility
+                ' ExportAsFixedFormat(OutputFileName, ExportFormat, [OpenAfterExport], [OptimizeFor], [Range])
+                doc.ExportAsFixedFormat pdfPath, wdExportFormatPDF, False, wdExportOptimizeForPrint, wdExportAllDocument
                 
                 If Err.Number <> 0 Then
                     failed = failed & file.Name & " - " & Err.Description & vbCrLf
@@ -108,7 +103,7 @@ Public Sub BatchWordToPDF()
                 End If
                 
                 ' Close without saving changes to original
-                doc.Close SaveChanges:=wdDoNotSaveChanges
+                doc.Close wdDoNotSaveChanges
             End If
             On Error GoTo 0
         End If

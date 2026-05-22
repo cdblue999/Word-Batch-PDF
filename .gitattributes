@@ -1,0 +1,3 @@
+# Force CRLF line endings for VBA files (required by VBA import)
+*.bas text eol=crlf
+* text=auto eol=lf
